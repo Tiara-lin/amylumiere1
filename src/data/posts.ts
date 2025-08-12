@@ -72,7 +72,7 @@ export const posts: Post[] = [
     "location": "Tuscany, Italy",
     "media": {
       "type": "image",
-      "url": "https://i.ibb.co/WWCrc2zw/3.jpg"
+      "url": "https://i.ibb.co/jkdyqzqr/3.jpg"
     },
     "caption": "I belong here. So does my body.",
     "likes": 9724,
