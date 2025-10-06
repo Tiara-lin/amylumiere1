@@ -5,10 +5,76 @@
     <link rel="icon" type="image/svg+xml" href="/amylumiere1/vite.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Instagram Interface Clone</title>
-    <script type="module" crossorigin src="/amylumiere1/assets/index-DB5seWEs.js"></script>
-    <link rel="stylesheet" crossorigin href="/amylumiere1/assets/index-DuwFfNXd.css">
   </head>
   <body>
     <div id="root"></div>
+    <script type="module" src="/src/main.tsx"></script>
+
+    <!-- Qualtrics iframe integration: UUID echo + auto-resize + scroll-bottom -->
+    <script>
+      (function () {
+        // Your Qualtrics domain (kept strict for security)
+        var TARGET_ORIGIN = "https://tassel.syd1.qualtrics.com";
+
+        // Read URL param
+        function getParam(name) {
+          var m = new RegExp('[?&]' + name + '=([^&]*)').exec(location.search);
+          return m ? decodeURIComponent(m[1]) : '';
+        }
+        // Validate UUID v4
+        function isUUIDv4(x) {
+          return /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(x);
+        }
+        // Post to parent (Qualtrics)
+        function post(msg) {
+          try { parent.postMessage(msg, TARGET_ORIGIN); }
+          catch (e) { parent.postMessage(msg, "*"); }
+        }
+
+        // ① Echo UUID back to Qualtrics for matching
+        var pid = getParam('pid') || '';
+        post({ type: 'uuid-echo', pid: pid, valid: isUUIDv4(pid) });
+
+        // ② Auto-resize iframe to content height
+        function sendSize() {
+          var h = Math.max(
+            document.body.scrollHeight, document.documentElement.scrollHeight,
+            document.body.offsetHeight, document.documentElement.offsetHeight,
+            document.body.clientHeight, document.documentElement.clientHeight
+          );
+          post({ type: 'resize-iframe', height: h });
+        }
+        window.addEventListener('load', sendSize);
+        try { new ResizeObserver(sendSize).observe(document.body); }
+        catch (_) { setInterval(sendSize, 800); }
+
+        // ③ Detect scrolled-to-bottom (once)
+        function atBottom() {
+          return (window.innerHeight + window.scrollY) >= (document.body.offsetHeight - 2);
+        }
+        var throttled = false;
+        function onScroll() {
+          if (throttled) return;
+          throttled = true;
+          setTimeout(function () {
+            throttled = false;
+            if (atBottom()) {
+              post({ type: 'scrolled-bottom' });
+              window.removeEventListener('scroll', onScroll);
+            }
+          }, 200);
+        }
+        window.addEventListener('scroll', onScroll);
+        // Very short pages (no scroll) – treat as bottom
+        window.addEventListener('load', function () {
+          setTimeout(function () {
+            if (atBottom()) {
+              post({ type: 'scrolled-bottom' });
+              window.removeEventListener('scroll', onScroll);
+            }
+          }, 300);
+        });
+      })();
+    </script>
   </body>
 </html>
