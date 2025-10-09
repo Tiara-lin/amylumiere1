@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Heart, MessageCircle, Send, Bookmark, MoreHorizontal, Play, Volume2, VolumeX } from 'lucide-react';
 import { useAnalytics } from '../hooks/useAnalytics';
+import type { AnalyticsHook } from '../hooks/useAnalytics';
 
 interface Comment {
   username: string;
@@ -9,17 +10,18 @@ interface Comment {
 
 interface PostProps {
   username: string;
-  userImage: string;
+  userImage: string; // avatar
   location?: string;
   media?: {
     type: 'image' | 'video';
     url: string;
-    thumbnail?: string; // 建議提供：可當 video poster
+    thumbnail?: string; // 建議給影片封面
   };
   caption: string;
   likes: number;
   timestamp: string;
   comments: Comment[];
+  analytics?: AnalyticsHook; // ← 改成可選，避免 Feed 傳/不傳都出錯
 }
 
 const Post: React.FC<PostProps> = ({
@@ -47,6 +49,19 @@ const Post: React.FC<PostProps> = ({
   const { ensureSession, trackInteraction, trackPostView } = useAnalytics();
   const postId = `${username}_${caption.slice(0, 20).replace(/\s+/g, '_')}`;
 
+  // ---- 計算安全的顯示模式與來源（避免資料缺漏導致整卡壞掉）----
+  const mediaType: 'image' | 'video' =
+    media?.type === 'video' || media?.type === 'image' ? media.type : 'image';
+
+  const imageSrc =
+    mediaType === 'image'
+      ? (media?.url && media.url.trim()) || userImage // 圖片優先 media.url，缺就退回 avatar
+      : undefined;
+
+  const videoSrc = mediaType === 'video' ? media?.url : undefined;
+  const videoPoster = media?.thumbnail || undefined;
+
+  // ------------------ 互動行為 ------------------
   const handleLike = async () => {
     const newLikedState = !isLiked;
     setIsLiked(newLikedState);
@@ -74,7 +89,6 @@ const Post: React.FC<PostProps> = ({
         comment_length: comment.length,
       });
       setComment('');
-      console.log('Comment posted:', comment);
     }
   };
 
@@ -114,12 +128,13 @@ const Post: React.FC<PostProps> = ({
     await trackInteraction('double_tap_like', postId, username);
   };
 
+  // ------------------ 檢視追蹤 ------------------
   useEffect(() => {
     const observer = new IntersectionObserver(
       (entries) => {
         entries.forEach(async (entry) => {
           if (entry.isIntersecting && !hasTrackedView.current) {
-            await ensureSession(); // ✅ 確保 session 建立（含 UUID）
+            await ensureSession(); // 確保 session/UUID
             hasTrackedView.current = true;
             viewStartTime.current = Date.now();
           } else if (!entry.isIntersecting && hasTrackedView.current) {
@@ -132,7 +147,7 @@ const Post: React.FC<PostProps> = ({
               username,
               viewDuration,
               Math.abs(scrollPercentage),
-              (media?.type as 'image' | 'video') || 'image'
+              mediaType
             );
           }
         });
@@ -146,7 +161,7 @@ const Post: React.FC<PostProps> = ({
       if (node) observer.unobserve(node);
       observer.disconnect();
     };
-  }, [postId, username, media?.type, trackPostView, ensureSession]);
+  }, [postId, username, mediaType, trackPostView, ensureSession]);
 
   const displayedComments = showAllComments ? comments : comments.slice(0, 2);
 
@@ -177,55 +192,66 @@ const Post: React.FC<PostProps> = ({
       </div>
 
       {/* Media */}
-      {media && (
-        <div className="w-full aspect-square bg-black flex items-center justify-center overflow-hidden relative">
-          {media.type === 'image' ? (
-            <img
-              src={media.url}                // ✅ 修正：顯示貼文圖片，而非 avatar
-              alt="Post"
+      <div className="w-full aspect-square bg-black flex items-center justify-center overflow-hidden relative">
+        {/* 1) 有圖片就顯示圖片（優先 media.url，否則退回 avatar） */}
+        {mediaType === 'image' && imageSrc ? (
+          <img
+            src={imageSrc}
+            alt="Post"
+            className="w-full h-full object-cover"
+            onDoubleClick={handleMediaDoubleClick}
+            loading="lazy"
+            decoding="async"
+            draggable={false}
+          />
+        ) : null}
+
+        {/* 2) 有影片且有 URL 才顯示影片 */}
+        {mediaType === 'video' && videoSrc ? (
+          <div className="relative w-full h-full" onClick={togglePlay}>
+            <video
+              ref={videoRef}
+              src={videoSrc}
+              poster={videoPoster}
               className="w-full h-full object-cover"
-              onDoubleClick={handleMediaDoubleClick}
-              loading="lazy"
-              decoding="async"
-              draggable={false}
+              loop
+              muted={isMuted}
+              playsInline            // iOS 避免自動全螢幕
+              preload="metadata"     // 只抓首幀/長度，不整段下載
+              onPlay={() => setIsPlaying(true)}
+              onPause={() => setIsPlaying(false)}
             />
-          ) : (
-            <div className="relative w-full h-full" onClick={togglePlay}>
-              <video
-                ref={videoRef}
-                src={media.url}
-                poster={media.thumbnail}
-                className="w-full h-full object-cover"
-                loop
-                muted={isMuted}
-                playsInline           // ✅ iOS 避免自動全螢幕
-                preload="metadata"    // ✅ 只抓首幀/長度，不整段下載
-                // disablePictureInPicture //（可選）避免 PiP
-                // controls               //（可選）若要原生控制列
-                // controlsList="nodownload noplaybackrate noremoteplayback" //（可選）
-                onPlay={() => setIsPlaying(true)}
-                onPause={() => setIsPlaying(false)}
-              />
-              {!isPlaying && (
-                <div className="absolute inset-0 flex items-center justify-center bg-black bg-opacity-50 pointer-events-none">
-                  <Play className="w-16 h-16 text-white" />
-                </div>
-              )}
-              <button
-                type="button"
-                className="absolute bottom-4 right-4 p-2 bg-black bg-opacity-50 rounded-full text-white"
-                onClick={async (e) => {
-                  e.stopPropagation();
-                  await toggleMute();
-                }}
-                aria-label={isMuted ? 'Unmute video' : 'Mute video'}
-              >
-                {isMuted ? <VolumeX className="w-5 h-5" /> : <Volume2 className="w-5 h-5" />}
-              </button>
-            </div>
-          )}
-        </div>
-      )}
+            {!isPlaying && (
+              <div className="absolute inset-0 flex items-center justify-center bg-black bg-opacity-50 pointer-events-none">
+                <Play className="w-16 h-16 text-white" />
+              </div>
+            )}
+            <button
+              type="button"
+              className="absolute bottom-4 right-4 p-2 bg-black bg-opacity-50 rounded-full text-white"
+              onClick={async (e) => {
+                e.stopPropagation();
+                await toggleMute();
+              }}
+              aria-label={isMuted ? 'Unmute video' : 'Mute video'}
+            >
+              {isMuted ? <VolumeX className="w-5 h-5" /> : <Volume2 className="w-5 h-5" />}
+            </button>
+          </div>
+        ) : null}
+
+        {/* 3) 如果 media 缺失 → 顯示 avatar 當佔位，避免整張卡片空白 */}
+        {!imageSrc && !(mediaType === 'video' && videoSrc) ? (
+          <img
+            src={userImage}
+            alt="Fallback"
+            className="w-full h-full object-cover"
+            loading="lazy"
+            decoding="async"
+            draggable={false}
+          />
+        ) : null}
+      </div>
 
       {/* Actions */}
       <div className="p-3">
