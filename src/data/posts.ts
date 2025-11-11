@@ -22,7 +22,7 @@ export const posts: Post[] = [
     "location": "Tuscany, Italy",
     "media": {
       "type": "image",
-      "url": "https://tiara-lin.github.io/mockup-images/amy_mixed/3.jpg"
+      "url": "https://tiara-lin.github.io/mockup-images/amy_mixed/1.jpg"
     },
     "caption": "I belong here. So does my body.",
     "likes": 9724,
@@ -72,7 +72,7 @@ export const posts: Post[] = [
     "location": "Paris, France",
     "media": {
       "type": "image",
-      "url": "https://tiara-lin.github.io/mockup-images/amy_mixed/1.jpg"
+      "url": "https://tiara-lin.github.io/mockup-images/amy_mixed/3.jpg"
     },
     "caption": "Soft power. Quiet confidence. Real beauty.",
     "likes": 10343,
