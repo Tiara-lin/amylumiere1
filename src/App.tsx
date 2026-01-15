@@ -47,7 +47,7 @@ function App() {
             <Profile 
               username="beautyamy.ai"
               name="Amy Lumiere"
-              imageUrl="https://tiara-lin.github.io/mockup-images/amy_mixed/9.jpg"
+              imageUrl="https://tiara-lin.github.io/mockup-images/new_nano_banana/amy/amy_natural/fs/4.jpg"
             />
             <Suggestions />
             <Footer />
